@@ -19,14 +19,17 @@ ENTRYPOINT ["tini"]
 USER node
 WORKDIR /usr/src/app
 
-COPY --chown=node .yarn ../.yarn
-COPY --chown=node backend/package.json backend/yarn.lock backend/.yarnrc.yml ./
+COPY --chown=node .yarn .yarn
+COPY --chown=node .yarnrc.yml .yarnrc.yml
+COPY --chown=node package.json package.json
+
+COPY --chown=node backend/package.json backend/yarn.lock backend/.yarnrc.yml backend/
 
 
 ## Stage 1: Code with all dependencies
 FROM base as code-with-deps
 USER node
-WORKDIR /usr/src/app
+WORKDIR /usr/src/app/backend
 
 # Install dependencies first to not invalidate the cache on every source change
 RUN --mount=type=cache,sharing=locked,uid=1000,gid=1000,target=/tmp/.yarn \
@@ -39,7 +42,7 @@ COPY --chown=node backend/src src
 ## Stage 2a: Dev config files and tests
 FROM code-with-deps as development
 USER node
-WORKDIR /usr/src/app
+WORKDIR /usr/src/app/backend
 
 COPY --chown=node backend/.eslintrc.js backend/eslint-local-rules.js backend/.prettierrc backend/jest-e2e.json  ./
 COPY --chown=node backend/test test
@@ -49,7 +52,7 @@ CMD ["node", "-r", "ts-node/register", "src/main.ts"]
 ## Stage 2b: Compile TypeScript
 FROM code-with-deps as builder
 USER node
-WORKDIR /usr/src/app
+WORKDIR /usr/src/app/backend
 
 RUN yarn run build
 
@@ -67,7 +70,7 @@ USER node
 WORKDIR /usr/src/app
 ENV NODE_ENV=production
 
-COPY --chown=node --from=builder /usr/src/app/dist ./dist
+COPY --chown=node --from=builder /usr/src/app/backend/dist ./dist
 
 RUN --mount=type=cache,sharing=locked,uid=1000,gid=1000,target=/tmp/.yarn \
     YARN_CACHE_FOLDER=/tmp/.yarn yarn workspaces focus --all --production
